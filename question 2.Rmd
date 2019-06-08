@@ -1,0 +1,396 @@
+---
+title: "Question 2"
+author: "Saurabh Malkar"
+date: "October 24, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+ here we create transactions dataframe and convert unix timestamp to standard date formate. and get the summary of the table . We also remove the outtliers.
+```{r}
+networktenx<-read.table(file="networktenxpayTX.txt",header=F,sep=" ")
+networktenx <- networktenx[ which(networktenx$V4<=2.05218256e+26), ]
+colnames(networktenx)<-c("FromId","ToId","date","TotalAmount")
+summary(networktenx)
+
+networktenx$date<- as.Date(as.POSIXct(networktenx$date, origin="1970-01-01"))
+```
+
+here we are taking the opening value of the token as the Price of that day.
+
+```{r}
+pricetenx<-read.table(file="tenxpay.txt",header=T,sep="\t")
+summary(pricetenx)
+
+pricetenx<-pricetenx[c(1,2)]
+pricetenx$Date<-as.Date(pricetenx$Date,format="%m/%d/%Y")
+colnames(pricetenx)<-c("Date","Price")
+```
+
+Splitting the main transaction table into 7 Layers based on the amount of transactions. The layer size is not fixed as the all the interval of amount of transaction do not contain equal number of transaction . Equally splitted layers may contain very less feature to measure the required correlation.
+the layer are splitted into from $$1 \:to \:10^3 \: ,10^3 \: to \: 10^{10} \:, 10^{10}\: to \:10^{15}\:, 10^{15}\: to \:10^{18}\: , 10^{18}\: to \:10^{20}\:, 10^{20} \: to \:10^{24}\: and \:10^{24}\: and \:above\: are\: layer\: 7\:,\:6,\:5,\:4,\:3,\:2,\:1 \:respectively.$$
+
+```{r}
+layer_1<-networktenx[which(networktenx$TotalAmount>=1e+24),]
+layer_2<-networktenx[which(networktenx$TotalAmount>=1e+20 & networktenx$TotalAmount< 1e+24 ),]
+summary(layer_2)
+
+layer_3<-networktenx[which(networktenx$TotalAmount>=1e+18 & networktenx$TotalAmount< 1e+20 ),]
+layer_4<-networktenx[which(networktenx$TotalAmount>=1e+15 & networktenx$TotalAmount< 1e+18 ),]
+layer_5<-networktenx[which(networktenx$TotalAmount>=1e+10 & networktenx$TotalAmount< 1e+15 ),]
+layer_6<-networktenx[which(networktenx$TotalAmount>=1e+3 & networktenx$TotalAmount< 1e+10 ),]
+layer_7<-networktenx[which(networktenx$TotalAmount>=1e+0 & networktenx$TotalAmount< 1e+3),]
+```
+Here we are calculating the number of transaction that happened on a particular date by calculating the frequency of the date.
+
+```{r}
+Flayer_1 <-c(layer_1[,3])
+summary(Flayer_1)
+count_layer1<-as.data.frame(table(Flayer_1))
+colnames(count_layer1)<-c("Date","Frequency")
+nrow(count_layer1)
+```
+
+```{r}
+library(anytime)
+count_layer1$Date<- anydate(count_layer1$Date)
+```
+
+
+joining the price table and transaction frequency table using date as the key.
+```{r}
+library(sqldf)
+df3<-sqldf("SELECT f.Date, p.Price, f.Frequency FROM count_layer1 f INNER JOIN pricetenx p WHERE f.Date=p.Date")
+df3
+```
+
+here we are finding the correlation of the price and the number of transaction that happened on the date. 
+
+For the First layer i.e. transaction amount greater that $$10^{24}$$ we get a correlation of 0.83 this shows that large nummber of transactions happened at higher price where each transaction involves more that $$10^{24}$$ tokens. 
+```{r}
+cor.test(df3$Price, df3$Frequency, 
+                    method = "pearson")
+```
+```{r}
+library("ggpubr")
+ggscatter(df3, x = "Price", y = "Frequency", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "Open Price", ylab = "Frequency of Token Amount")
+```
+
+
+Finding correlation For layer two. It found out to be 0.018 that is not much correlation between price and number of transactions with amount between $$10^{20}\: to\: 10^{24}$$. Similar steps are done to following layers.
+```{r}
+Flayer <-c(layer_2[,3])
+summary(Flayer)
+count_layer<-as.data.frame(table(Flayer))
+colnames(count_layer)<-c("Date","Frequency")
+nrow(count_layer)
+
+count_layer$Date<- anydate(count_layer$Date)
+df3<-sqldf("SELECT f.Date, p.Price, f.Frequency FROM count_layer f INNER JOIN pricetenx p WHERE f.Date=p.Date")
+cor.test(df3$Price, df3$Frequency, 
+                    method = "pearson")
+
+library("ggpubr")
+ggscatter(df3, x = "Price", y = "Frequency", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "Open Price", ylab = "Frequency of Token Amount")
+```
+
+```{r}
+Flayer <-c(layer_3[,3])
+summary(Flayer)
+count_layer<-as.data.frame(table(Flayer))
+colnames(count_layer)<-c("Date","Frequency")
+nrow(count_layer)
+
+count_layer$Date<- anydate(count_layer$Date)
+df3<-sqldf("SELECT f.Date, p.Price, f.Frequency FROM count_layer f INNER JOIN pricetenx p WHERE f.Date=p.Date")
+cor.test(df3$Price, df3$Frequency, 
+                    method = "pearson")
+
+library("ggpubr")
+ggscatter(df3, x = "Price", y = "Frequency", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "Open Price", ylab = "Frequency of Token Amount")
+```
+```{r}
+Flayer <-c(layer_4[,3])
+summary(Flayer)
+count_layer<-as.data.frame(table(Flayer))
+colnames(count_layer)<-c("Date","Frequency")
+nrow(count_layer)
+
+count_layer$Date<- anydate(count_layer$Date)
+df3<-sqldf("SELECT f.Date, p.Price, f.Frequency FROM count_layer f INNER JOIN pricetenx p WHERE f.Date=p.Date")
+cor.test(df3$Price, df3$Frequency, 
+                    method = "pearson")
+
+library("ggpubr")
+ggscatter(df3, x = "Price", y = "Frequency", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "Open Price", ylab = "Frequency of Token Amount")
+```
+This layer has a negative correlation that means as the price increases the number of transactions are decreased.
+```{r}
+Flayer <-c(layer_5[,3])
+summary(Flayer)
+count_layer<-as.data.frame(table(Flayer))
+colnames(count_layer)<-c("Date","Frequency")
+nrow(count_layer)
+
+count_layer$Date<- anydate(count_layer$Date)
+df3<-sqldf("SELECT f.Date, p.Price, f.Frequency FROM count_layer f INNER JOIN pricetenx p WHERE f.Date=p.Date")
+cor.test(df3$Price, df3$Frequency, 
+                    method = "pearson")
+
+library("ggpubr")
+ggscatter(df3, x = "Price", y = "Frequency", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "Open Price", ylab = "Frequency of Token Amount")
+```
+
+```{r}
+Flayer <-c(layer_6[,3])
+summary(Flayer)
+count_layer<-as.data.frame(table(Flayer))
+colnames(count_layer)<-c("Date","Frequency")
+nrow(count_layer)
+
+count_layer$Date<- anydate(count_layer$Date)
+df3<-sqldf("SELECT f.Date, p.Price, f.Frequency FROM count_layer f INNER JOIN pricetenx p WHERE f.Date=p.Date")
+cor.test(df3$Price, df3$Frequency, 
+                    method = "pearson")
+
+library("ggpubr")
+ggscatter(df3, x = "Price", y = "Frequency", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "Open Price", ylab = "Frequency of Token Amount")
+```
+```{r}
+Flayer <-c(layer_7[,3])
+summary(Flayer)
+count_layer<-as.data.frame(table(Flayer))
+colnames(count_layer)<-c("Date","Frequency")
+nrow(count_layer)
+
+count_layer$Date<- anydate(count_layer$Date)
+df3<-sqldf("SELECT f.Date, p.Price, f.Frequency FROM count_layer f INNER JOIN pricetenx p WHERE f.Date=p.Date")
+cor.test(df3$Price, df3$Frequency, 
+                    method = "pearson")
+
+library("ggpubr")
+ggscatter(df3, x = "Price", y = "Frequency", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "Open Price", ylab = "Frequency of Token Amount")
+```
+
+
+We take low as the price of that day for all the 7 layers. And after calculating the pearson correlation that all the layer except layer 7 has a significant negative correlation hence we can conclude that as the price increases the number of transactions decreases.
+
+```{r}
+pricetenx<-read.table(file="tenxpay.txt",header=T,sep="\t")
+summary(pricetenx)
+
+pricetenx<-pricetenx[c(1,4)]
+pricetenx$Date<-as.Date(pricetenx$Date,format="%m/%d/%Y")
+colnames(pricetenx)<-c("Date","Price")
+
+```
+```{r}
+Flayer_1 <-c(layer_1[,3])
+summary(Flayer_1)
+count_layer1<-as.data.frame(table(Flayer_1))
+colnames(count_layer1)<-c("Date","Frequency")
+nrow(count_layer1)
+```
+
+```{r}
+library(anytime)
+count_layer1$Date<- anydate(count_layer1$Date)
+```
+```{r}
+library(sqldf)
+df3<-sqldf("SELECT f.Date, p.Price, f.Frequency FROM count_layer1 f INNER JOIN pricetenx p WHERE f.Date=p.Date")
+```
+```{r}
+cor.test(df3$Price, df3$Frequency, 
+                    method = "pearson")
+```
+```{r}
+library("ggpubr")
+ggscatter(df3, x = "Price", y = "Frequency", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "Open Price", ylab = "Frequency of Token Amount")
+```
+For layer two
+```{r}
+Flayer <-c(layer_2[,3])
+summary(Flayer)
+count_layer<-as.data.frame(table(Flayer))
+colnames(count_layer)<-c("Date","Frequency")
+nrow(count_layer)
+
+count_layer$Date<- anydate(count_layer$Date)
+df3<-sqldf("SELECT f.Date, p.Price, f.Frequency FROM count_layer f INNER JOIN pricetenx p WHERE f.Date=p.Date")
+cor.test(df3$Price, df3$Frequency, 
+                    method = "pearson")
+
+library("ggpubr")
+ggscatter(df3, x = "Price", y = "Frequency", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "Open Price", ylab = "Frequency of Token Amount")
+```
+
+
+```{r}
+Flayer <-c(layer_3[,3])
+summary(Flayer)
+count_layer<-as.data.frame(table(Flayer))
+colnames(count_layer)<-c("Date","Frequency")
+nrow(count_layer)
+
+count_layer$Date<- anydate(count_layer$Date)
+df3<-sqldf("SELECT f.Date, p.Price, f.Frequency FROM count_layer f INNER JOIN pricetenx p WHERE f.Date=p.Date")
+cor.test(df3$Price, df3$Frequency, 
+                    method = "pearson")
+
+library("ggpubr")
+ggscatter(df3, x = "Price", y = "Frequency", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "Open Price", ylab = "Frequency of Token Amount")
+```
+
+
+```{r}
+Flayer <-c(layer_4[,3])
+summary(Flayer)
+count_layer<-as.data.frame(table(Flayer))
+colnames(count_layer)<-c("Date","Frequency")
+nrow(count_layer)
+
+count_layer$Date<- anydate(count_layer$Date)
+df3<-sqldf("SELECT f.Date, p.Price, f.Frequency FROM count_layer f INNER JOIN pricetenx p WHERE f.Date=p.Date")
+cor.test(df3$Price, df3$Frequency, 
+                    method = "pearson")
+
+library("ggpubr")
+ggscatter(df3, x = "Price", y = "Frequency", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "Open Price", ylab = "Frequency of Token Amount")
+```
+
+
+
+```{r}
+Flayer <-c(layer_5[,3])
+summary(Flayer)
+count_layer<-as.data.frame(table(Flayer))
+colnames(count_layer)<-c("Date","Frequency")
+nrow(count_layer)
+
+count_layer$Date<- anydate(count_layer$Date)
+df3<-sqldf("SELECT f.Date, p.Price, f.Frequency FROM count_layer f INNER JOIN pricetenx p WHERE f.Date=p.Date")
+cor.test(df3$Price, df3$Frequency, 
+                    method = "pearson")
+
+library("ggpubr")
+ggscatter(df3, x = "Price", y = "Frequency", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "Open Price", ylab = "Frequency of Token Amount")
+```
+
+
+```{r}
+Flayer <-c(layer_6[,3])
+summary(Flayer)
+count_layer<-as.data.frame(table(Flayer))
+colnames(count_layer)<-c("Date","Frequency")
+nrow(count_layer)
+
+count_layer$Date<- anydate(count_layer$Date)
+df3<-sqldf("SELECT f.Date, p.Price, f.Frequency FROM count_layer f INNER JOIN pricetenx p WHERE f.Date=p.Date")
+cor.test(df3$Price, df3$Frequency, 
+                    method = "pearson")
+
+library("ggpubr")
+ggscatter(df3, x = "Price", y = "Frequency", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "Open Price", ylab = "Frequency of Token Amount")
+```
+
+```{r}
+Flayer <-c(layer_7[,3])
+summary(Flayer)
+count_layer<-as.data.frame(table(Flayer))
+colnames(count_layer)<-c("Date","Frequency")
+nrow(count_layer)
+
+count_layer$Date<- anydate(count_layer$Date)
+df3<-sqldf("SELECT f.Date, p.Price, f.Frequency FROM count_layer f INNER JOIN pricetenx p WHERE f.Date=p.Date")
+cor.test(df3$Price, df3$Frequency, 
+                    method = "pearson")
+
+library("ggpubr")
+ggscatter(df3, x = "Price", y = "Frequency", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "Open Price", ylab = "Frequency of Token Amount")
+```
+
+
+Trying kendall correlation on layer 1 with low as the price of the day. The correlation we get is worst than pearson which was -0.33
+```{r}
+Flayer <-c(layer_1[,3])
+summary(Flayer)
+count_layer<-as.data.frame(table(Flayer))
+colnames(count_layer)<-c("Date","Frequency")
+nrow(count_layer)
+
+count_layer$Date<- anydate(count_layer$Date)
+df3<-sqldf("SELECT f.Date, p.Price, f.Frequency FROM count_layer f INNER JOIN pricetenx p WHERE f.Date=p.Date")
+cor.test(df3$Price, df3$Frequency, 
+                    method = "kendall")
+
+library("ggpubr")
+ggscatter(df3, x = "Price", y = "Frequency", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "kendall",
+          xlab = "Open Price", ylab = "Frequency of Token Amount")
+```
+
+Trying spearman correlation on layer 1 with low as the price of the day. The correlation we get is worst than pearson which was -0.33
+```{r}
+Flayer <-c(layer_1[,3])
+summary(Flayer)
+count_layer<-as.data.frame(table(Flayer))
+colnames(count_layer)<-c("Date","Frequency")
+nrow(count_layer)
+
+count_layer$Date<- anydate(count_layer$Date)
+df3<-sqldf("SELECT f.Date, p.Price, f.Frequency FROM count_layer f INNER JOIN pricetenx p WHERE f.Date=p.Date")
+cor.test(df3$Price, df3$Frequency, 
+                    method = "spearman")
+
+library("ggpubr")
+ggscatter(df3, x = "Price", y = "Frequency", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "spearman",
+          xlab = "Open Price", ylab = "Frequency of Token Amount")
+```
